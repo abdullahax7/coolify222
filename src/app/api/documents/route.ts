@@ -88,8 +88,37 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
-  const admin = await requireAdmin(supabase);
-  if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+  // Distinguish "no session reached the server" from "session is fine but not an
+  // admin". Both used to return a blank 403, which made the two impossible to tell
+  // apart from the client.
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    console.error('[POST /api/documents] No authenticated user — auth cookie did not reach the server.');
+    return NextResponse.json(
+      { error: 'Not authenticated. Your login session did not reach the server (cookie missing/expired). Try logging out and back in.' },
+      { status: 401 },
+    );
+  }
+
+  const { data: profile, error: profileErr } = await supabase
+    .from('profiles')
+    .select('is_admin')
+    .eq('id', user.id)
+    .single();
+
+  if (profileErr) {
+    console.error('[POST /api/documents] Could not read profile for', user.email, '-', profileErr.message);
+    return NextResponse.json({ error: `Could not verify admin status: ${profileErr.message}` }, { status: 500 });
+  }
+
+  if (!profile?.is_admin) {
+    console.error('[POST /api/documents] User', user.email, 'is not an admin (is_admin =', profile?.is_admin, ').');
+    return NextResponse.json(
+      { error: `Account "${user.email}" is not marked as an admin (is_admin = ${String(profile?.is_admin)}).` },
+      { status: 403 },
+    );
+  }
 
   const formData = await req.formData();
   const file = formData.get('file') as File | null;
