@@ -3,6 +3,10 @@ import { createAdminClient } from '@/lib/supabase/server';
 
 export type AuditAction = 'create' | 'update' | 'delete' | 'restore' | 'approve' | 'reject' | 'login' | 'logout';
 
+// Keep the audit log bounded so the table can't grow without limit and
+// overload the database. Only the newest MAX_AUDIT_ENTRIES rows are retained.
+export const MAX_AUDIT_ENTRIES = 100;
+
 interface AuditEntry {
   adminId?: string | null;
   adminEmail?: string | null;
@@ -39,7 +43,34 @@ export async function logAudit(entry: AuditEntry): Promise<void> {
       ip,
       user_agent: userAgent,
     });
+
+    // Trim old entries so the table stays bounded to the newest 100 rows.
+    await trimAuditLog(admin);
   } catch (err) {
     console.error('[audit] log failed:', err);
+  }
+}
+
+/**
+ * Delete every audit row older than the newest MAX_AUDIT_ENTRIES.
+ * Best-effort — never throws, so a failed trim can't break the write that
+ * triggered it. `admin` must be a service-role client (bypasses RLS).
+ */
+async function trimAuditLog(admin: Awaited<ReturnType<typeof createAdminClient>>): Promise<void> {
+  try {
+    // Find the timestamp of the (MAX_AUDIT_ENTRIES+1)-th newest row. Anything
+    // strictly older than this cutoff is surplus and can be removed.
+    const { data: cutoffRows, error } = await admin
+      .from('admin_audit_log')
+      .select('created_at')
+      .order('created_at', { ascending: false })
+      .range(MAX_AUDIT_ENTRIES, MAX_AUDIT_ENTRIES);
+
+    if (error || !cutoffRows || cutoffRows.length === 0) return; // <= limit rows, nothing to trim
+
+    const cutoff = cutoffRows[0].created_at;
+    await admin.from('admin_audit_log').delete().lt('created_at', cutoff);
+  } catch (err) {
+    console.error('[audit] trim failed:', err);
   }
 }

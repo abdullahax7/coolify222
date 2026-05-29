@@ -28,6 +28,7 @@ export default function AuditLogTab() {
   const [error, setError] = useState<string | null>(null);
   const [filterAction, setFilterAction] = useState('');
   const [filterTable, setFilterTable] = useState('');
+  const [clearing, setClearing] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -48,6 +49,22 @@ export default function AuditLogTab() {
   };
 
   useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [filterAction, filterTable]);
+
+  const clearAll = async () => {
+    if (!confirm('Delete the ENTIRE audit log? This cannot be undone.')) return;
+    setClearing(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/admin/audit-log', { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to clear');
+      setEntries([]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unknown error');
+    } finally {
+      setClearing(false);
+    }
+  };
 
   const actionColor = (a: string) => {
     if (a === 'delete') return { bg: '#fee2e2', fg: '#991b1b' };
@@ -85,6 +102,17 @@ export default function AuditLogTab() {
           {TABLES.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
         <button className={`${styles.btn} ${styles.btnInfo}`} onClick={load} disabled={loading}>↻ Refresh</button>
+        <button
+          className={`${styles.btn} ${styles.btnDanger}`}
+          onClick={clearAll}
+          disabled={clearing || loading || entries.length === 0}
+        >
+          {clearing ? 'Clearing…' : '🗑 Clear all logs'}
+        </button>
+      </div>
+
+      <div style={{ fontSize: 12, color: '#9ca3af', margin: '0 0 12px' }}>
+        Showing the most recent entries. The log auto-trims to the newest 100 rows to keep the database light.
       </div>
 
       {error && (

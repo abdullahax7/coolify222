@@ -27,3 +27,23 @@ export async function GET(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ entries: data ?? [] });
 }
+
+// Clear the entire audit log. Admin-only, irreversible.
+export async function DELETE(req: NextRequest) {
+  const userClient = await createClient();
+  const { data: { user } } = await userClient.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { data: profile } = await userClient.from('profiles').select('is_admin').eq('id', user.id).single();
+  if (!profile?.is_admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+  const admin = await createAdminClient();
+  // Delete all rows. `neq` on the primary key matches every row (no id equals
+  // the all-zero UUID), giving an unconditional delete.
+  const { error } = await admin
+    .from('admin_audit_log')
+    .delete()
+    .neq('id', '00000000-0000-0000-0000-000000000000');
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
+}
