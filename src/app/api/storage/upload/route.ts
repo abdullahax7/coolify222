@@ -8,19 +8,22 @@ export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const admin = await createAdminClient();
-
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
     const ALLOWED_BUCKETS = ['properties', 'property-images', 'cash-inquiries', 'site-assets'];
     const requestedBucket = (formData.get('bucket') as string) || 'properties';
     const bucket = ALLOWED_BUCKETS.includes(requestedBucket) ? requestedBucket : 'properties';
+
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    // Allow unauthenticated uploads to public-facing buckets ('property-images' and 'cash-inquiries')
+    const isPublicBucket = ['property-images', 'cash-inquiries'].includes(bucket);
+    if (!user && !isPublicBucket) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const admin = await createAdminClient();
 
     if (!file) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });

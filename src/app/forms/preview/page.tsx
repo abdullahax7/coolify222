@@ -45,6 +45,9 @@ function FormPreviewContent() {
       schema.fields.forEach(f => {
         initialData[f.key] = f.type === 'checkboxes' ? [] : '';
       });
+      if (normalizedKey.includes('tenancy') || normalizedKey.includes('standard occupation contract')) {
+        initialData.faceImageUrl = '';
+      }
 
       if (orderId) {
         try {
@@ -276,6 +279,74 @@ function FormPreviewContent() {
                 )}
               </div>
             ))}
+
+            {(normalizedKey.includes('tenancy') || normalizedKey.includes('standard occupation contract')) && (
+              <div className={styles.fieldGroup} style={{ gridColumn: 'span 2', marginTop: '20px' }}>
+                <div className={styles.labelArea}>
+                  <label>👤 Upload Face Image</label>
+                  <span className={styles.helpText}>Please upload a clear photo of yourself. This is required for identity verification and administrative review.</span>
+                </div>
+                
+                <div style={{ display: 'flex', gap: '16px', alignItems: 'center', marginTop: '10px' }}>
+                  {formData.faceImageUrl ? (
+                    <div style={{ position: 'relative', width: '100px', height: '100px' }}>
+                      <img 
+                        src={formData.faceImageUrl} 
+                        alt="Face image" 
+                        style={{ width: '100px', height: '100px', borderRadius: '12px', objectFit: 'cover', border: '2px solid var(--primary)' }} 
+                      />
+                      <button 
+                        type="button" 
+                        onClick={() => handleInputChange('faceImageUrl', '')} 
+                        style={{ position: 'absolute', top: '-8px', right: '-8px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '50%', width: '22px', height: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100px', height: '100px', borderRadius: '12px', border: '2px dashed #cbd5e1', cursor: 'pointer', background: '#f8fafc', transition: 'all 0.2s', padding: '10px' }}>
+                      <span style={{ fontSize: '24px' }}>📷</span>
+                      <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500, marginTop: '4px', textAlign: 'center' }}>Upload Photo</span>
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        style={{ display: 'none' }} 
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          
+                          setSaving(true);
+                          setError('');
+                          try {
+                            const fd = new FormData();
+                            fd.append('file', file);
+                            fd.append('bucket', 'property-images');
+                            
+                            const res = await fetch('/api/storage/upload', {
+                              method: 'POST',
+                              body: fd
+                            });
+                            
+                            if (!res.ok) {
+                              const errData = await res.json();
+                              throw new Error(errData.error || 'Failed to upload photo');
+                            }
+                            
+                            const data = await res.json();
+                            handleInputChange('faceImageUrl', data.url);
+                          } catch (err: any) {
+                            setError(err.message || 'Failed to upload image.');
+                          } finally {
+                            setSaving(false);
+                          }
+                        }} 
+                      />
+                    </label>
+                  )}
+                  {saving && <span style={{ fontSize: '13px', color: '#64748b' }}>Uploading face image...</span>}
+                </div>
+              </div>
+            )}
           </div>
 
           {error && <div className={styles.errorBanner}>{error}</div>}

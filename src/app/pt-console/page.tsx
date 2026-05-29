@@ -238,7 +238,7 @@ function Shell({ tab, setTab, onLogout }: { tab: Tab; setTab: (t: Tab) => void; 
   const [loadingUsers,setLoadingUsers]= useState(true);
   const [documents,   setDocuments]   = useState<PropertyDocument[]>([]);
   const [tenancies,   setTenancies]   = useState<Tenancy[]>([]);
-  const [docToManage, setDocToManage] = useState<{ propId: string; doc?: PropertyDocument } | null>(null);
+  const [docToManage, setDocToManage] = useState<{ propId: string; doc?: PropertyDocument; initialType?: string } | null>(null);
   const [viewingPropId, setViewingPropId] = useState<string | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [cashInquiries, setCashInquiries] = useState<CashInquiry[]>([]);
@@ -701,14 +701,14 @@ function Shell({ tab, setTab, onLogout }: { tab: Tab; setTab: (t: Tab) => void; 
               overrides={overrides}
               onUpdateNotes={(id, notes) => saveOverride(id, { notes })}
               onAddTenancy={() => { setViewingPropId(null); setTab('tenants'); }}
-              onManageDoc={(id, doc) => setDocToManage({ propId: id, doc })}
+              onManageDoc={(id, doc, type) => setDocToManage({ propId: id, doc, initialType: type })}
               onAssign={assignProperty}
               allUsers={allUsers}
             />
           ) : (
             <>
               {tab === 'overview'      && <Overview orders={orders} messages={messages} setTab={setTab} documents={documents} tenancies={tenancies} customProps={customProps} allUsers={allUsers} />}
-              {tab === 'properties'    && <PropertiesTab overrides={overrides} onOverride={saveOverride} customProps={customProps} onCreate={createCustom} onUpdate={updateCustom} onDelete={deleteCustom} onAddTenancy={() => { setTab('tenants'); }} onManageDoc={(id, doc) => setDocToManage({ propId: id, doc })} onViewCompliance={(id) => setViewingPropId(id)} onViewDetails={(id) => setViewingPropId(id)} allUsers={allUsers} />}
+              {tab === 'properties'    && <PropertiesTab overrides={overrides} onOverride={saveOverride} customProps={customProps} onCreate={createCustom} onUpdate={updateCustom} onDelete={deleteCustom} onAddTenancy={() => { setTab('tenants'); }} onManageDoc={(id, doc, type) => setDocToManage({ propId: id, doc, initialType: type })} onViewCompliance={(id) => setViewingPropId(id)} onViewDetails={(id) => setViewingPropId(id)} allUsers={allUsers} />}
               {tab === 'listing-plans' && <OrdersTab type="listing" orders={listingOrders} onCreate={createOrder} onUpdate={updateOrder} onDelete={deleteOrder} />}
               {tab === 'services'      && <OrdersTab type="service" orders={serviceOrders} onCreate={createOrder} onUpdate={updateOrder} onDelete={deleteOrder} />}
               {tab === 'inbox'         && <InboxTab messages={messages} inquiries={cashInquiries} onMarkRead={markRead} onMarkAllRead={markAllRead} onDeleteMsg={deleteMsg} onUpdateInquiry={updateCashInquiry} onDeleteInquiry={deleteCashInquiry} />}
@@ -731,9 +731,11 @@ function Shell({ tab, setTab, onLogout }: { tab: Tab; setTab: (t: Tab) => void; 
 
       {docToManage && (
         <DocModal
-        properties={customProps}
-        initialPropertyId={docToManage.propId}
-        existingDoc={docToManage.doc}
+          key={`${docToManage.propId}-${docToManage.initialType || 'new'}-${docToManage.doc?.id || 'none'}`}
+          properties={customProps}
+          initialPropertyId={docToManage.propId}
+          initialDocType={docToManage.initialType}
+          existingDoc={docToManage.doc}
           onClose={() => setDocToManage(null)}
           onSave={(d) => {
             if (docToManage.doc) updateDoc({ ...docToManage.doc, ...d } as PropertyDocument);
@@ -904,6 +906,15 @@ function PropertyListItem({
         <button className={styles.btnPurple} onClick={onAddTenancy}>Add Tenancy</button>
         <button className={styles.btnPurple} onClick={onViewDetails}>View Details</button>
         <button className={styles.btnPurple} onClick={onViewCompliance}>Manage compliance</button>
+        {onToggleVisibility && (
+          <button 
+            className={styles.btnPurple} 
+            style={{ background: isHidden ? '#16a34a' : '#ef4444', color: 'white' }} 
+            onClick={onToggleVisibility}
+          >
+            {isHidden ? '👁️ Show' : '👻 Hide'}
+          </button>
+        )}
       </div>
 
       <button className={styles.cardDots} onClick={() => setMenuOpen(!menuOpen)}>⋮</button>
@@ -937,7 +948,7 @@ function PropertiesTab({ overrides, onOverride, customProps, onCreate, onUpdate,
   overrides: Record<string, PropOverride>; onOverride: (id: string, p: Partial<PropOverride>) => void;
   customProps: CustomProp[]; onCreate: (c: Omit<CustomProp, 'id' | 'createdAt'>) => void;
   onUpdate: (c: CustomProp) => void; onDelete: (id: string) => void;
-  onAddTenancy: (id: string) => void; onManageDoc: (id: string, doc?: PropertyDocument) => void;
+  onAddTenancy: (id: string) => void; onManageDoc: (id: string, doc?: PropertyDocument, initialType?: string) => void;
   onViewCompliance: (id: string) => void; onViewDetails: (id: string) => void;
   allUsers: UserProfile[];
 }) {
@@ -1010,6 +1021,8 @@ function PropertiesTab({ overrides, onOverride, customProps, onCreate, onUpdate,
             status={p.status}
             onApprove={() => onUpdate({ ...p, is_approved: true, is_rejected: false, status: 'Live' })}
             onReject={() => setRejecting(p)}
+            isHidden={!!overrides[p.id]?.hidden}
+            onToggleVisibility={() => onOverride(p.id, { hidden: !overrides[p.id]?.hidden })}
           />
         ))}
       </div>
@@ -1654,15 +1667,16 @@ function DocumentsTab({ documents, onCreate, onUpdate, onDelete, customProps }: 
   );
 }
 
-function DocModal({ properties, initialPropertyId, existingDoc, onClose, onSave }: {
+function DocModal({ properties, initialPropertyId, initialDocType, existingDoc, onClose, onSave }: {
   properties: { id: string; title: string }[];
   initialPropertyId?: string;
+  initialDocType?: string;
   existingDoc?: PropertyDocument;
   onClose: () => void;
   onSave: (d: Omit<PropertyDocument, 'id' | 'dateUploaded'>) => void;
 }) {
   const [propertyId, setPropertyId] = useState(existingDoc?.propertyId || initialPropertyId || properties[0]?.id || '');
-  const [type, setType] = useState(existingDoc?.documentType || DOC_TYPES[0]);
+  const [type, setType] = useState(existingDoc?.documentType || initialDocType || DOC_TYPES[0]);
   const [expiry, setExpiry] = useState(''); // We'll handle date conversion
   
   // Initialize file state from existing document if it has a URL or base64
@@ -1673,6 +1687,21 @@ function DocModal({ properties, initialPropertyId, existingDoc, onClose, onSave 
       url: existingDoc.fileUrl 
     } : null
   );
+
+  useEffect(() => {
+    setPropertyId(existingDoc?.propertyId || initialPropertyId || properties[0]?.id || '');
+    setType(existingDoc?.documentType || initialDocType || DOC_TYPES[0]);
+    if (existingDoc) {
+      setFile({ 
+        name: existingDoc.fileName || 'Existing Document', 
+        base64: existingDoc.fileBase64,
+        url: existingDoc.fileUrl 
+      });
+    } else {
+      setFile(null);
+      setExpiry('');
+    }
+  }, [existingDoc, initialPropertyId, initialDocType, properties]);
 
   useEffect(() => {
     if (existingDoc?.expiryDate) {
@@ -1807,7 +1836,7 @@ function PropertyDetailView({ id, onBack, customProps, documents, tenancies, ove
   overrides: Record<string, PropOverride>;
   onUpdateNotes: (id: string, notes: string) => void;
   onAddTenancy: (id: string) => void;
-  onManageDoc: (id: string, doc?: PropertyDocument) => void;
+  onManageDoc: (id: string, doc?: PropertyDocument, initialType?: string) => void;
   onAssign: (id: string, email: string) => void;
   allUsers: UserProfile[];
 }) {
@@ -1978,7 +2007,7 @@ function PropertyDetailView({ id, onBack, customProps, documents, tenancies, ove
                         </div>
                         <button 
                           className={styles.itemAction} 
-                          onClick={() => onManageDoc(id, doc)}
+                          onClick={() => onManageDoc(id, doc, item.type)}
                         >
                           {doc ? 'Update' : 'Add'} 
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
@@ -2064,15 +2093,15 @@ function PropertyDetailView({ id, onBack, customProps, documents, tenancies, ove
         <div className={styles.detailCard}>
           <div className={styles.detailCardHeader}><h3>🏢 Property Summary</h3></div>
           <div className={styles.detailCardBody}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8125rem' }}>
-                <span style={{ color: '#64748b' }}>Beds / Baths</span>
-                <span style={{ fontWeight: 700 }}>{prop.beds} / {prop.baths}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8125rem' }}>
-                <span style={{ color: '#64748b' }}>Area</span>
-                <span style={{ fontWeight: 700 }}>{prop.sqft} sq ft</span>
-              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8125rem' }}>
+                  <span style={{ color: '#64748b' }}>🛏️ Beds / 🛁 Baths</span>
+                  <span style={{ fontWeight: 700 }}>{prop.beds} / {prop.baths}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8125rem' }}>
+                  <span style={{ color: '#64748b' }}>📐 Area</span>
+                  <span style={{ fontWeight: 700 }}>{prop.sqft} sq ft</span>
+                </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8125rem' }}>
                 <span style={{ color: '#64748b' }}>Listing Type</span>
                 <span style={{ fontWeight: 700 }}>{prop.type || 'Custom'}</span>
@@ -2241,6 +2270,21 @@ function FormsTab({ records, onUpdate, onCreate, onDelete, fixedType }: {
                     <label>Notes</label>
                     <div className={styles.readVal} style={{ whiteSpace: 'pre-wrap' }}>{selected.notes || '—'}</div>
                   </div>
+
+                  {selected.form_data?.faceImageUrl && (
+                    <div className={`${styles.editField} ${styles.editSpan2}`}>
+                      <label>👤 Client Face Image</label>
+                      <div style={{ marginTop: '8px' }}>
+                        <a href={selected.form_data.faceImageUrl} target="_blank" rel="noopener noreferrer">
+                          <img 
+                            src={selected.form_data.faceImageUrl} 
+                            alt="Face of client" 
+                            style={{ width: '120px', height: '120px', borderRadius: '12px', objectFit: 'cover', border: '2px solid #e2e8f0', cursor: 'pointer' }} 
+                          />
+                        </a>
+                      </div>
+                    </div>
+                  )}
                   
 
                 </div>

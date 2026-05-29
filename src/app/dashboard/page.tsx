@@ -48,6 +48,7 @@ type Tab = 'overview' | 'list-property' | 'services' | 'compliance' | 'settings'
 
 interface UserDocument {
   id: string;
+  property_id?: string | null;
   property_name: string | null;
   document_type: string | null;
   expiry_date: string | null;
@@ -76,6 +77,85 @@ function DashboardContent() {
   const [myListings, setMyListings] = useState<MyListing[]>([]);
   const [assignedProperties, setAssignedProperties] = useState<MyListing[]>([]);
   const [userDocs, setUserDocs] = useState<UserDocument[]>([]);
+  const [expandedProps, setExpandedProps] = useState<Record<string, boolean>>({});
+  const toggleExpand = (propId: string) => {
+    setExpandedProps(prev => ({ ...prev, [propId]: !prev[propId] }));
+  };
+
+  const propertiesWithDocs = React.useMemo(() => {
+    const list: MyListing[] = [];
+    const addedIds = new Set<string>();
+
+    myListings.forEach(p => {
+      if (!addedIds.has(p.id)) {
+        addedIds.add(p.id);
+        list.push(p);
+      }
+    });
+
+    assignedProperties.forEach(p => {
+      if (!addedIds.has(p.id)) {
+        addedIds.add(p.id);
+        list.push(p);
+      }
+    });
+
+    userDocs.forEach(d => {
+      const propId = d.property_id;
+      const propName = d.property_name || 'Other Property';
+      if (propId && !addedIds.has(propId)) {
+        addedIds.add(propId);
+        list.push({
+          id: propId,
+          title: propName,
+          location: 'Property Trader Managed',
+          price: '—',
+          beds: '—',
+          baths: '—',
+          sqft: '—',
+          type: 'House',
+          sector: 'Residential',
+          status: 'Active',
+          createdAt: '',
+          image_url: '',
+          gallery_urls: '',
+          is_approved: true,
+          is_rejected: false,
+          description: '',
+          features: ''
+        });
+      } else if (!propId) {
+        const found = list.find(p => p.title.toLowerCase() === propName.toLowerCase());
+        if (!found) {
+          const pseudoId = `pseudo-${propName.replace(/\s+/g, '-').toLowerCase()}`;
+          if (!addedIds.has(pseudoId)) {
+            addedIds.add(pseudoId);
+            list.push({
+              id: pseudoId,
+              title: propName,
+              location: 'Property Trader Managed',
+              price: '—',
+              beds: '—',
+              baths: '—',
+              sqft: '—',
+              type: 'House',
+              sector: 'Residential',
+              status: 'Active',
+              createdAt: '',
+              image_url: '',
+              gallery_urls: '',
+              is_approved: true,
+              is_rejected: false,
+              description: '',
+              features: ''
+            });
+          }
+        }
+      }
+    });
+
+    return list;
+  }, [myListings, assignedProperties, userDocs]);
   const params = useSearchParams();
   const initialTab = (params.get('tab') as Tab) || 'overview';
   const [tab, setTab] = useState<Tab>(initialTab);
@@ -522,7 +602,6 @@ function DashboardContent() {
             ) : (
               <>
                 {(() => {
-                  // Categorise into expiring (≤30 days) vs valid for the alert banner.
                   const now = Date.now();
                   const days30 = 30 * 24 * 60 * 60 * 1000;
                   const expiring = userDocs.filter(d => {
@@ -532,60 +611,118 @@ function DashboardContent() {
                   });
                   if (expiring.length === 0) return null;
                   return (
-                    <div className={styles.alertBanner} style={{ background: '#fff7ed', borderColor: '#fdba74' }}>
+                    <div className={styles.alertBanner} style={{ background: '#fff7ed', borderColor: '#fdba74', marginBottom: '32px' }}>
                       <div className={styles.alertIcon}>⚠️</div>
                       <div className={styles.alertText}>
                         <strong>{expiring.length} document{expiring.length === 1 ? '' : 's'} expiring soon</strong>
-                        <p>Review the table below — anything in the next 30 days needs renewing.</p>
+                        <p>Review the properties below — anything expiring in the next 30 days needs renewing.</p>
                       </div>
                     </div>
                   );
                 })()}
 
-                <div className={styles.recentDocs}>
-                  <h3 className={styles.sectionTitle}>Your Documents</h3>
-                  <div className={styles.tableWrap}>
-                    <table className={styles.table}>
-                      <thead>
-                        <tr>
-                          <th>Document</th>
-                          <th>Property</th>
-                          <th>Uploaded</th>
-                          <th>Expires</th>
-                          <th>Status</th>
-                          <th></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {userDocs.map(d => {
-                          const expiryTs = d.expiry_date ? new Date(d.expiry_date).getTime() : NaN;
-                          const isExpired = !isNaN(expiryTs) && expiryTs < now;
-                          const isExpiringSoon = !isNaN(expiryTs) && !isExpired && expiryTs - now < 30 * 24 * 60 * 60 * 1000;
-                          const pillColor = isExpired
-                            ? { bg: '#fee2e2', fg: '#991b1b', label: 'Expired' }
-                            : isExpiringSoon
-                              ? { bg: '#fff7ed', fg: '#d97706', label: 'Expiring' }
-                              : { bg: '#ecfdf5', fg: '#10b981', label: d.status || 'Valid' };
-                          return (
-                            <tr key={d.id}>
-                              <td>{d.document_type || d.file_name || 'Document'}</td>
-                              <td>{d.property_name || '—'}</td>
-                              <td>{d.date_uploaded || '—'}</td>
-                              <td style={isExpired || isExpiringSoon ? { color: pillColor.fg, fontWeight: 700 } : undefined}>
-                                {d.expiry_date || '—'}
-                              </td>
-                              <td><span className={styles.statusPill} style={{ background: pillColor.bg, color: pillColor.fg }}>{pillColor.label}</span></td>
-                              <td>
-                                {d.file_url ? (
-                                  <a href={d.file_url} target="_blank" rel="noopener noreferrer" style={{ color: '#e11d48', fontWeight: 700, fontSize: 13, textDecoration: 'none' }}>View →</a>
-                                ) : '—'}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                <div className={styles.listingGrid}>
+                  {propertiesWithDocs.map(prop => {
+                    const propDocs = userDocs.filter(d => d.property_id === prop.id || d.property_name?.toLowerCase() === prop.title.toLowerCase());
+                    const isExpanded = !!expandedProps[prop.id];
+                    return (
+                      <div key={prop.id} className={styles.listingCard} style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+                        {/* Property Image & Badge */}
+                        <div className={styles.listingImgWrap} style={{ position: 'relative', height: '200px' }}>
+                          <div className={styles.statusBadge} style={{ position: 'absolute', top: 10, left: 10, zIndex: 1, background: 'var(--primary)', color: 'white' }}>
+                            {prop.sector || 'Residential'}
+                          </div>
+                          {prop.image_url ? (
+                            <Image src={prop.image_url} alt={prop.title} fill style={{ objectFit: 'cover' }} unoptimized />
+                          ) : (
+                            <div className={styles.listingPlaceholder}>No Image</div>
+                          )}
+                        </div>
+
+                        {/* Property Details */}
+                        <div className={styles.listingInfo} style={{ display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'space-between', padding: '20px' }}>
+                          <div>
+                            <div className={styles.listingTitle} style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '6px' }}>{prop.title}</div>
+                            <div className={styles.listingPrice} style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--primary)', marginBottom: '8px' }}>{prop.price || '—'}</div>
+                            <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '4px 0 12px' }}>📍 {prop.location}</p>
+                            <div style={{ display: 'flex', gap: '12px', fontSize: '0.75rem', color: '#475569', fontWeight: 600, marginBottom: '16px' }}>
+                              {prop.beds && prop.beds !== '—' && <span>🛏️ {prop.beds} Beds</span>}
+                              {prop.baths && prop.baths !== '—' && <span>🛁 {prop.baths} Baths</span>}
+                              {prop.sqft && prop.sqft !== '—' && <span>📐 {prop.sqft} Sqft</span>}
+                            </div>
+                          </div>
+
+                          <div style={{ marginTop: 'auto' }}>
+                            <button
+                              onClick={() => toggleExpand(prop.id)}
+                              className={styles.viewAllBtn}
+                              style={{
+                                background: isExpanded ? 'var(--primary)' : '#f1f5f9',
+                                color: isExpanded ? 'white' : 'var(--navy)',
+                                width: '100%',
+                                textAlign: 'center',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px',
+                                borderRadius: '6px',
+                                fontSize: '0.8rem',
+                                fontWeight: 700,
+                                border: 'none',
+                                cursor: 'pointer',
+                                padding: '10px',
+                                transition: 'all 0.2s'
+                              }}
+                            >
+                              <span>📂 {isExpanded ? 'Hide Compliances' : 'View Compliances'} ({propDocs.length})</span>
+                              <span style={{ transition: 'transform 0.3s', transform: isExpanded ? 'rotate(180deg)' : 'none', fontSize: '0.75rem' }}>▼</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Collapsible Documents Panel */}
+                        <div className={`${styles.complianceDocsSection} ${isExpanded ? styles.complianceDocsExpanded : ''}`}>
+                          {propDocs.length === 0 ? (
+                            <div className={styles.complianceEmptyDocs}>
+                              No legal documents uploaded yet.
+                            </div>
+                          ) : (
+                            propDocs.map(d => {
+                              const expiryTs = d.expiry_date ? new Date(d.expiry_date).getTime() : NaN;
+                              const isExpired = !isNaN(expiryTs) && expiryTs < now;
+                              const isExpiringSoon = !isNaN(expiryTs) && !isExpired && expiryTs - now < 30 * 24 * 60 * 60 * 1000;
+                              const pillColor = isExpired
+                                ? { bg: '#fee2e2', fg: '#991b1b', label: 'Expired' }
+                                : isExpiringSoon
+                                  ? { bg: '#fff7ed', fg: '#d97706', label: 'Expiring' }
+                                  : { bg: '#ecfdf5', fg: '#10b981', label: d.status || 'Valid' };
+                              return (
+                                <div key={d.id} className={styles.complianceDocRow}>
+                                  <span className={styles.complianceDocIcon}>📄</span>
+                                  <div className={styles.complianceDocInfo}>
+                                    <div className={styles.complianceDocType} title={d.document_type || 'Document'}>
+                                      {d.document_type || d.file_name || 'Document'}
+                                    </div>
+                                    <div className={styles.complianceDocMeta} style={isExpired || isExpiringSoon ? { color: pillColor.fg, fontWeight: 700 } : undefined}>
+                                      Exp: {d.expiry_date || '—'}
+                                    </div>
+                                  </div>
+                                  <span className={styles.complianceStatusBadge} style={{ background: pillColor.bg, color: pillColor.fg }}>
+                                    {pillColor.label}
+                                  </span>
+                                  {d.file_url && (
+                                    <a href={d.file_url} target="_blank" rel="noopener noreferrer" className={styles.complianceViewLink}>
+                                      View
+                                    </a>
+                                  )}
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </>
             )}

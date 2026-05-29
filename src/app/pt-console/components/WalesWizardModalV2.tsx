@@ -190,6 +190,57 @@ export default function WalesWizardModalV2({ title, existing, onClose, onSave, f
                   <label>Internal Notes</label>
                   <textarea rows={3} value={notes} onChange={e => setNotes(e.target.value)} />
                 </div>
+
+                <div className={styles.editField} style={{ marginTop: '16px' }}>
+                  <label>👤 Client Face Image</label>
+                  {walesData.faceImageUrl ? (
+                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginTop: '8px' }}>
+                      <img 
+                        src={walesData.faceImageUrl} 
+                        alt="Face" 
+                        style={{ width: '80px', height: '80px', borderRadius: '8px', objectFit: 'cover', border: '2px solid #e2e8f0' }} 
+                      />
+                      <button 
+                        type="button" 
+                        className={styles.btnDanger} 
+                        style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer', fontWeight: 600 }}
+                        onClick={() => handleInputChange('faceImageUrl', '')}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '8px' }}>
+                      <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '80px', height: '80px', borderRadius: '8px', border: '2px dashed #cbd5e1', cursor: 'pointer', background: '#f8fafc', padding: '6px', textAlign: 'center' }}>
+                        <span style={{ fontSize: '20px' }}>📷</span>
+                        <span style={{ fontSize: '9px', color: '#64748b', marginTop: '2px' }}>Upload</span>
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          style={{ display: 'none' }} 
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            try {
+                              const fd = new FormData();
+                              fd.append('file', file);
+                              fd.append('bucket', 'property-images');
+                              const res = await fetch('/api/storage/upload', { method: 'POST', body: fd });
+                              if (res.ok) {
+                                const data = await res.json();
+                                handleInputChange('faceImageUrl', data.url);
+                              } else {
+                                alert('Upload failed');
+                              }
+                            } catch (err) {
+                              console.error(err);
+                            }
+                          }} 
+                        />
+                      </label>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className={styles.wizardSection}>

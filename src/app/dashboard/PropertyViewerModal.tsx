@@ -77,15 +77,15 @@ export default function PropertyViewerModal({ property, onClose }: PropertyViewe
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', background: '#f8fafc', padding: '20px', borderRadius: '12px' }}>
                 <div>
                   <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: '#94a3b8', fontWeight: 700 }}>Bedrooms</div>
-                  <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>{property.beds}</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>🛏️ {property.beds}</div>
                 </div>
                 <div>
                   <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: '#94a3b8', fontWeight: 700 }}>Bathrooms</div>
-                  <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>{property.baths}</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>🛁 {property.baths}</div>
                 </div>
                 <div>
                   <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: '#94a3b8', fontWeight: 700 }}>Area</div>
-                  <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>{property.sqft} sq ft</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>📐 {property.sqft} sq ft</div>
                 </div>
               </div>
             </div>

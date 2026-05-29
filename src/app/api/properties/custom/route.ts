@@ -67,11 +67,45 @@ export async function GET(req: NextRequest) {
     }
     const retryResult = await retry.order('created_at', { ascending: false });
     if (retryResult.error) return NextResponse.json({ error: retryResult.error.message }, { status: 500 });
-    return NextResponse.json({ properties: retryResult.data });
+    
+    // Fetch hidden overrides
+    const { data: hiddenOverrides } = await adminClient
+      .from('property_overrides')
+      .select('property_id')
+      .eq('hidden', true);
+    const hiddenIds = new Set(hiddenOverrides?.map(o => o.property_id) ?? []);
+    
+    const filterHidden = (list: any[]) => {
+      return (list ?? []).filter((p: any) => {
+        if (hiddenIds.has(p.id)) {
+          return !!user;
+        }
+        return true;
+      });
+    };
+
+    return NextResponse.json({ properties: filterHidden(retryResult.data) });
   }
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ properties: data });
+  
+  // Fetch hidden overrides for main query
+  const { data: hiddenOverrides } = await adminClient
+    .from('property_overrides')
+    .select('property_id')
+    .eq('hidden', true);
+  const hiddenIds = new Set(hiddenOverrides?.map(o => o.property_id) ?? []);
+  
+  const filterHidden = (list: any[]) => {
+    return (list ?? []).filter((p: any) => {
+      if (hiddenIds.has(p.id)) {
+        return !!user;
+      }
+      return true;
+    });
+  };
+
+  return NextResponse.json({ properties: filterHidden(data) });
 }
 
 export async function POST(req: NextRequest) {

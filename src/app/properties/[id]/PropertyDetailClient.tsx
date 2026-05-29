@@ -156,9 +156,9 @@ export default function PropertyDetailClient({ property: initialProperty, allPro
               <h1 className={styles.title}>{property.title}</h1>
               <p className={styles.location}>📍 {property.location}</p>
               <div className={styles.amenitiesBar}>
-                <div className={styles.amenity}><span>{property.beds}</span>Beds</div>
-                <div className={styles.amenity}><span>{property.baths}</span>Baths</div>
-                <div className={styles.amenity}><span>{property.sqft}</span>Sqft</div>
+                <div className={styles.amenity}><span>🛏️ {property.beds}</span>Beds</div>
+                <div className={styles.amenity}><span>🛁 {property.baths}</span>Baths</div>
+                <div className={styles.amenity}><span>📐 {property.sqft}</span>Sqft</div>
               </div>
             </div>
             <div className={styles.infoRight}>

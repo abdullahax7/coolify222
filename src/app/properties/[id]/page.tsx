@@ -32,8 +32,34 @@ function splitLocation(loc?: string | null): { locality?: string; region?: strin
 
 async function getPropertyData(id: string) {
   const supabase = await createStaticClient();
+  
+  // Check if current property is hidden
+  const { data: override } = await supabase
+    .from('property_overrides')
+    .select('hidden')
+    .eq('property_id', id)
+    .maybeSingle();
+
+  if (override?.hidden) return null;
+
   const { data: prop } = await supabase.from('custom_properties').select('*').eq('id', id).single();
-  const { data: all } = await supabase.from('custom_properties').select('*').limit(10);
+  
+  // Fetch active, non-hidden properties for suggestion list
+  const { data: all } = await supabase
+    .from('custom_properties')
+    .select('*')
+    .eq('is_approved', true)
+    .eq('status', 'Live');
+
+  const { data: hiddenOverrides } = await supabase
+    .from('property_overrides')
+    .select('property_id')
+    .eq('hidden', true);
+
+  const hiddenIds = new Set(hiddenOverrides?.map(o => o.property_id) ?? []);
+  const visibleAll = (all ?? [])
+    .filter(p => !hiddenIds.has(p.id))
+    .slice(0, 10);
 
   if (!prop) return null;
 
@@ -49,7 +75,7 @@ async function getPropertyData(id: string) {
     mapEmbedUrl: prop.map_embed_url || `https://www.google.com/maps?q=${encodeURIComponent(prop.location || '')}&output=embed`,
   };
 
-  const formattedAll = (all ?? []).map((p: Record<string, unknown>) => {
+  const formattedAll = visibleAll.map((p: Record<string, unknown>) => {
     const row = p as {
       id: string; title?: string; location?: string; price?: string; type?: string;
       sector?: string; beds?: number; baths?: number; sqft?: number;

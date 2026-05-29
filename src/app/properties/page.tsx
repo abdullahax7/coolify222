@@ -32,8 +32,17 @@ async function fetchCustomProperties(): Promise<(Property & { isUnavailable?: bo
 
     if (!data) return [];
 
+    // Fetch hidden overrides
+    const { data: hiddenOverrides } = await supabase
+      .from('property_overrides')
+      .select('property_id')
+      .eq('hidden', true);
+      
+    const hiddenIds = new Set(hiddenOverrides?.map(o => o.property_id) ?? []);
+    const visibleData = data.filter((p: { id: string }) => !hiddenIds.has(p.id));
+
     // Extract unique assigned emails
-    const emails = Array.from(new Set(data.map((p: { assigned_to_email: string | null }) => p.assigned_to_email).filter(Boolean)));
+    const emails = Array.from(new Set(visibleData.map((p: { assigned_to_email: string | null }) => p.assigned_to_email).filter(Boolean)));
     
     // Fetch roles for these emails
     const { data: profiles } = await supabase
@@ -47,7 +56,7 @@ async function fetchCustomProperties(): Promise<(Property & { isUnavailable?: bo
         .map((pr: { email: string }) => pr.email)
     );
 
-    return data.map((p: Record<string, unknown>) => ({
+    return visibleData.map((p: Record<string, unknown>) => ({
       id: p.id as string,
       title: p.title as string,
       location: p.location as string,

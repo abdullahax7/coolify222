@@ -50,13 +50,13 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
         <p className={styles.location}>{location}</p>
         <div className={styles.details}>
           <div className={styles.detail}>
-            <span>{beds}</span> Beds
+            <span>🛏️ {beds}</span> Beds
           </div>
           <div className={styles.detail}>
-            <span>{baths}</span> Baths
+            <span>🛁 {baths}</span> Baths
           </div>
           <div className={styles.detail}>
-            <span>{sqft}</span> Sqft
+            <span>📐 {sqft}</span> Sqft
           </div>
         </div>
       </div>
